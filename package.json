@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "name": "apareo-con-actualizacion",
+  "version": "1.0.0",
+  "main": "",
+  "scripts": {
+    "test": "node test/apareoConActualizacion.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
