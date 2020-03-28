@@ -1,4 +1,7 @@
 // importar lo que sea necesario
+import FileManager from './FileManager.js'
+import util from './Util.js'
+const mensajes = []
 
 /**
  * ordena (in place) una coleccion de datos segun las claves provistas.
@@ -6,6 +9,20 @@
  * @param {string[]} claves las claves por las que quiero ordenar, por orden de importancia
  */
 function ordenar(coleccion, claves) {
+    const sorted = coleccion.sort(function(a, b) {
+        let result = 0
+        let iterator = 0
+        while (result == 0 && iterator < claves.length) {
+            let key = claves[iterator]
+            result = a[key] - b[key]
+            iterator ++
+        }
+        return result    
+    })
+    return sorted
+}
+function log(e) {
+    console.log(e.dni, e.debe)
 }
 
 /**
@@ -16,12 +33,21 @@ function ordenar(coleccion, claves) {
  * @param {string} rutaLog
  */
 function actualizarArchivosDeudas(rutaDeudasOld, rutaPagos, rutaDeudasNew, rutaLog) {
+    const deudasOLD = FileManager.parseJsonFile(rutaDeudasOld)
+    const pagos = FileManager.parseJsonFile(rutaPagos)
+    const deudasNEW = FileManager.parseJsonFile(rutaDeudasNew)
+    actualizarDeudas(deudasOLD, pagos, loggerCallback)
 }
 
 /**
  * @callback loggerCallback
  * @param {string} error error message to display
  */
+
+ function loggerCallback(msg) {
+    console.log(msg)
+    mensajes.push(msg)
+ }
 
 /**
  * realiza el apareo con actualizacion entre deudas y pagos, y loguea algunos eventos relevantes.
@@ -31,6 +57,66 @@ function actualizarArchivosDeudas(rutaDeudasOld, rutaPagos, rutaDeudasNew, rutaL
  * @returns {Object[]} las deudas actualizadas
  */
 function actualizarDeudas(deudas, pagos, logger) {
+    const deudasActualizadas = []
+
+    // Inválidos. No hay deuda para ese dni
+    const pagosSinDeuda = pagos.filter(p => deudas.every(d => d.dni != p.dni))
+    pagosSinDeuda.forEach(p => {
+        logger(armarMsgPagoSinDeudaAsociada(p))
+    }) 
+
+    // PagoConDatosErroneos
+    const pagosConDatosErroneos = pagos.filter(p => deudas.some(d => d.dni == p.dni && d.apellido != p.apellido))
+    pagosConDatosErroneos.forEach(p => {
+        logger(armarMsgPagoConDatosErroneos(deudas[0], p))
+    })
+
+    // Deudas sin pagos asociados
+    const deudasSinPagosAsociados = deudas.filter(d => pagos.every(p => d.dni != p.dni))
+
+    // Guardamos dos colecciones con las deudas válidas y los pagos válidos
+    const deudasConPagos = ordenar(deudas.filter(d => !deudasSinPagosAsociados.includes(d)), ['dni', 'debe'])
+
+    const pagosValidos = ordenar(pagos.filter(p => !pagosConDatosErroneos.includes(p) && !pagosSinDeuda.includes(p)), ['dni', 'pago'])
+
+    // Agregamos las deudas a la lista de deudas actualizadas. Si hay más de una para el mismo dni se suman sus montos('debe')
+    deudasConPagos.forEach(d => {
+        const deudaExistente = buscarEnColeccion(deudasActualizadas, d.dni, 'dni')
+        if (deudaExistente != null) {
+            actualizarDeuda(deudaExistente, (debe) => debe + d.debe)
+        } else {
+            deudasActualizadas.push(d)
+        }
+    })
+
+    // Recorremos los pagos válidos y por cada uno actualizamos la deuda que corresponda.
+    pagosValidos.forEach(p => {
+        const deudaExistente = buscarEnColeccion(deudasActualizadas, p.dni, 'dni')
+        if (deudaExistente != null) {
+            //log(deudaExistente)
+            //console.log("Pago: ", p.pago)
+            actualizarDeuda(deudaExistente, (debe) => debe - p.pago)
+            //log(deudaExistente)
+        }    
+    })
+
+    deudasActualizadas.forEach(log)
+
+    /* TODO: Ya están las deudas actualizadas, falta registrarlas en el archivo y después mejorar la performance de todo:
+    - Recorrer menos veces las colecciones para la actualización
+    - Ver realmente para qué sirve el ordenar
+    - Mejorar el callback actualizarDeuda
+    */
+}
+
+function buscarEnColeccion(coleccion, valor, clave) {
+    return coleccion.find(function(elemento){
+        return elemento[clave] == valor
+    })
+}
+
+function actualizarDeuda(deuda, accion) {
+    deuda.debe = accion(deuda.debe)
 }
 
 /**
@@ -72,6 +158,7 @@ function armarMsgPagoConDatosErroneos(deuda, pago) {
     const logMsg = `
 error al querer actualizar esta deuda:
 ${util.inspect(deuda)}
+
 con este pago:
 ${util.inspect(pago)}
 
