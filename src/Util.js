@@ -3,7 +3,7 @@ function inspect(obj) {
     for (let index in obj) {
         msg += `\n${index}: ${obj[index]}`
     }
-    return msg
+    return msg 
 }
 
 export default {

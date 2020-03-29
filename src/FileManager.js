@@ -4,7 +4,7 @@ function readFile(path) {
     return fs.readFileSync(path, 'utf-8')
 }
 
-function writeFile(path, value, isCreationEnabled) {
+function writeFile(path, value, isCreationEnabled = true) {
     if(fs.existsSync(path) || isCreationEnabled){
         fs.writeFileSync(path, value)
     }    

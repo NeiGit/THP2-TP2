@@ -1,6 +1,8 @@
 // importar lo que sea necesario
 import FileManager from './FileManager.js'
 import util from './Util.js'
+
+// Variable global, donde se irán guardando los mensajes que genere la función loggerCallback()
 const mensajes = []
 
 /**
@@ -21,9 +23,6 @@ function ordenar(coleccion, claves) {
     })
     return sorted
 }
-function log(e) {
-    console.log(e.dni, e.debe)
-}
 
 /**
  * recibe las rutas del archivo de deudas original, archivo de pagos, archivo de deudas con las actualizaciones, y archivo de log para registrar errores o advertencias.
@@ -35,17 +34,19 @@ function log(e) {
 function actualizarArchivosDeudas(rutaDeudasOld, rutaPagos, rutaDeudasNew, rutaLog) {
     const deudasOLD = FileManager.parseJsonFile(rutaDeudasOld)
     const pagos = FileManager.parseJsonFile(rutaPagos)
-    const deudasNEW = FileManager.parseJsonFile(rutaDeudasNew)
-    actualizarDeudas(deudasOLD, pagos, loggerCallback)
+
+    const deudasActualizadas = actualizarDeudas(deudasOLD, pagos, loggerCallback)
+
+    FileManager.writeFile(rutaLog, mensajes)
+    FileManager.writeFile(rutaDeudasNew, JSON.stringify(deudasActualizadas, null, 2))
+
 }
 
 /**
  * @callback loggerCallback
  * @param {string} error error message to display
  */
-
  function loggerCallback(msg) {
-    console.log(msg)
     mensajes.push(msg)
  }
 
@@ -56,67 +57,45 @@ function actualizarArchivosDeudas(rutaDeudasOld, rutaPagos, rutaDeudasNew, rutaL
  * @param {loggerCallback} logger funcion a la cual llamar en caso de necesitar loguear un evento
  * @returns {Object[]} las deudas actualizadas
  */
+
 function actualizarDeudas(deudas, pagos, logger) {
+    // declaramos la colección a devolver
     const deudasActualizadas = []
 
-    // Inválidos. No hay deuda para ese dni
-    const pagosSinDeuda = pagos.filter(p => deudas.every(d => d.dni != p.dni))
-    pagosSinDeuda.forEach(p => {
-        logger(armarMsgPagoSinDeudaAsociada(p))
-    }) 
-
-    // PagoConDatosErroneos
-    const pagosConDatosErroneos = pagos.filter(p => deudas.some(d => d.dni == p.dni && d.apellido != p.apellido))
-    pagosConDatosErroneos.forEach(p => {
-        logger(armarMsgPagoConDatosErroneos(deudas[0], p))
-    })
-
-    // Deudas sin pagos asociados
-    const deudasSinPagosAsociados = deudas.filter(d => pagos.every(p => d.dni != p.dni))
-
-    // Guardamos dos colecciones con las deudas válidas y los pagos válidos
-    const deudasConPagos = ordenar(deudas.filter(d => !deudasSinPagosAsociados.includes(d)), ['dni', 'debe'])
-
-    const pagosValidos = ordenar(pagos.filter(p => !pagosConDatosErroneos.includes(p) && !pagosSinDeuda.includes(p)), ['dni', 'pago'])
-
-    // Agregamos las deudas a la lista de deudas actualizadas. Si hay más de una para el mismo dni se suman sus montos('debe')
-    deudasConPagos.forEach(d => {
-        const deudaExistente = buscarEnColeccion(deudasActualizadas, d.dni, 'dni')
-        if (deudaExistente != null) {
-            actualizarDeuda(deudaExistente, (debe) => debe + d.debe)
+    // recorremos la lista de pagos
+    pagos.forEach(pago => {
+        // buscamos una deuda con el dni del pago
+        const deuda = buscarEnColeccion(deudas, pago.dni, 'dni')
+        // sino existe una deuda con el dni del pago, loggeamos el error
+        if (deuda == null) {
+            logger(armarMsgPagoSinDeudaAsociada(pago))
+        // si existe tal deuda, pero el apellido no coincide con el del pago, loggeamos el error    
+        } else if (deuda.apellido != pago.apellido) {
+            logger(armarMsgPagoConDatosErroneos(deuda, pago))
+        // si ambos datos coinciden, procesamos el pago    
         } else {
-            deudasActualizadas.push(d)
-        }
-    })
-
-    // Recorremos los pagos válidos y por cada uno actualizamos la deuda que corresponda.
-    pagosValidos.forEach(p => {
-        const deudaExistente = buscarEnColeccion(deudasActualizadas, p.dni, 'dni')
-        if (deudaExistente != null) {
-            //log(deudaExistente)
-            //console.log("Pago: ", p.pago)
-            actualizarDeuda(deudaExistente, (debe) => debe - p.pago)
-            //log(deudaExistente)
+            deuda.debe -= pago.pago
         }    
     })
 
-    deudasActualizadas.forEach(log)
+    // una vez procesados todos los pagos, recorremos las deudas
+    deudas.forEach(deuda => {
+        // si aun hay deuda pendiente, la agregamos a la coleccion a devolver
+        if (deuda.debe > 0) {
+            deudasActualizadas.push(deuda)
+        // si la deuda es negativa, loggeamos el mensaje    
+        } else if (deuda.debe < 0) {
+            logger(armarMsgPagoDeMas(deuda))
+        }
+    })
 
-    /* TODO: Ya están las deudas actualizadas, falta registrarlas en el archivo y después mejorar la performance de todo:
-    - Recorrer menos veces las colecciones para la actualización
-    - Ver realmente para qué sirve el ordenar
-    - Mejorar el callback actualizarDeuda
-    */
+    return deudasActualizadas
 }
 
 function buscarEnColeccion(coleccion, valor, clave) {
     return coleccion.find(function(elemento){
         return elemento[clave] == valor
     })
-}
-
-function actualizarDeuda(deuda, accion) {
-    deuda.debe = accion(deuda.debe)
 }
 
 /**
