@@ -2,7 +2,7 @@
 import FileManager from './FileManager.js'
 import util from './Util.js'
 
-// Variable global, donde se irán guardando los mensajes que genere la función loggerCallback()
+// Constante global, donde se irán guardando los mensajes que genere la función loggerCallback(). Puede ser accedida por todas las funciones del módulo
 const mensajes = []
 
 /**
@@ -14,6 +14,7 @@ function ordenar(coleccion, claves) {
     const sorted = coleccion.sort(function(a, b) {
         let result = 0
         let iterator = 0
+        // mientras la comparación resulte en equivalencias, sigue comparando hasta agotar las claves
         while (result == 0 && iterator < claves.length) {
             let key = claves[iterator]
             result = a[key] - b[key]
@@ -42,11 +43,11 @@ function actualizarArchivosDeudas(rutaDeudasOld, rutaPagos, rutaDeudasNew, rutaL
 
 }
 
-/**
+/** Almacena el mensaje recibido en la constante mensajes
  * @callback loggerCallback
  * @param {string} error error message to display
  */
- function loggerCallback(msg) {
+ function loggerCallback(msg) { 
     mensajes.push(msg)
  }
 
@@ -66,24 +67,24 @@ function actualizarDeudas(deudas, pagos, logger) {
     pagos.forEach(pago => {
         // buscamos una deuda con el dni del pago
         const deuda = buscarEnColeccion(deudas, pago.dni, 'dni')
-        // sino existe una deuda con el dni del pago, loggeamos el error
+        // si no existe una deuda con el dni del pago, loggeamos el error usando el callback
         if (deuda == null) {
             logger(armarMsgPagoSinDeudaAsociada(pago))
         // si existe tal deuda, pero el apellido no coincide con el del pago, loggeamos el error    
         } else if (deuda.apellido != pago.apellido) {
             logger(armarMsgPagoConDatosErroneos(deuda, pago))
-        // si ambos datos coinciden, procesamos el pago    
+        // si ambos datos coinciden, procesamos el pago, actualizando la deuda   
         } else {
             deuda.debe -= pago.pago
         }    
     })
 
-    // una vez procesados todos los pagos, recorremos las deudas
+    // una vez procesados todos los pagos, recorremos las deudas para saber cuáles debemos guardar en deudasActualizadas
     deudas.forEach(deuda => {
-        // si aun hay deuda pendiente, la agregamos a la coleccion a devolver
+        // si aun hay deuda pendiente, la agregamos a la deudasActualizadas
         if (deuda.debe > 0) {
             deudasActualizadas.push(deuda)
-        // si la deuda es negativa, loggeamos el mensaje    
+        // si la deuda es negativa, loggeamos el mensaje, y no la agregamos
         } else if (deuda.debe < 0) {
             logger(armarMsgPagoDeMas(deuda))
         }
@@ -91,7 +92,11 @@ function actualizarDeudas(deudas, pagos, logger) {
 
     return deudasActualizadas
 }
-
+/** Devuelve el primer match de una colección comparando el valor dado con el valor del campo de la clave dada
+ * @param  {Object[]} coleccion
+ * @param  {} valor para comparar
+ * @param  {} clave para saber qué atributo de los elementos de la colección hay que comparar
+ */
 function buscarEnColeccion(coleccion, valor, clave) {
     return coleccion.find(function(elemento){
         return elemento[clave] == valor
