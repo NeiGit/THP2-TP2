@@ -36,12 +36,50 @@ function actualizarArchivosDeudas(rutaDeudasOld, rutaPagos, rutaDeudasNew, rutaL
     const deudasOLD = FileManager.parseJsonFile(rutaDeudasOld)
     const pagos = FileManager.parseJsonFile(rutaPagos)
 
-    const deudasActualizadas = actualizarDeudas(deudasOLD, pagos, loggerCallback)
+    const deudasOLDOrdenado = ordenar(deudasOLD, ['dni', 'apellido', 'debe'])
+    const pagosOrdenado = ordenar(pagos, ['dni', 'apellido', 'pago'])
+    //console.log(deudasOLDOrdenado)
+    //console.log(pagosOrdenado)
+
+    const deudasActualizadas = actualizarDeudasConApareo(deudasOLDOrdenado, pagosOrdenado, loggerCallback)
+
+    /* const deudasActualizadas = actualizarDeudas(deudasOLD, pagos, loggerCallback) */
 
     FileManager.writeFile(rutaLog, mensajes)
-    FileManager.writeFile(rutaDeudasNew, JSON.stringify(deudasActualizadas, null, 2))
+    FileManager.writeFile(rutaDeudasNew, JSON.stringify(deudasActualizadas, null, 2)) 
 
 }
+
+function actualizarDeudasConApareo(deudas, pagos, logger) {
+    const deudasActualizadas = []
+    let iDeudas = 0
+    let iPagos = 0
+    while(iDeudas < deudas.length || iPagos < pagos.length) {
+        if (iDeudas >= deudas.length || pagos[iPagos].dni > deudas[iDeudas].dni) {
+            logger(armarMsgPagoSinDeudaAsociada(pagos[iPagos]))
+            iPagos ++
+        } else if (iPagos >= pagos.length || deudas[iDeudas].dni > pagos[iPagos].dni) { iDeudas ++}
+            else {
+                while (deudas[iDeudas] != null && pagos[iPagos] != null && deudas[iDeudas].dni == pagos[iPagos].dni) {
+                    if(deudas[iDeudas].apellido != pagos[iPagos].apellido) {
+                        logger(armarMsgPagoConDatosErroneos(deudas[iDeudas], pagos[iPagos]))
+                    } else {
+                        deudas[iDeudas].debe -= pagos[iPagos].pago
+                    }
+                    iPagos ++
+                }
+                if(deudas[iDeudas].debe < 0) {
+                    logger(armarMsgPagoDeMas(deudas[iDeudas]))
+                } else if(deudas[iDeudas].debe > 0) {   
+                    deudasActualizadas.push(deudas[iDeudas])
+                }    
+                iDeudas ++
+            }   
+    }
+    return deudasActualizadas 
+}
+
+
 
 /** Almacena el mensaje recibido en la constante mensajes
  * @callback loggerCallback

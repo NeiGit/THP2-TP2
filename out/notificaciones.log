@@ -1,4 +1,8 @@
 
+dni: 234 posee $100 a su favor
+
+=================================
+,
 error al querer actualizar esta deuda:
 
 id: 4
@@ -26,9 +30,5 @@ fecha: 2019-03-22T17:00:26.000Z
 nombre: daniela
 apellido: gimenez
 pago: 100
-
-=================================
-,
-dni: 234 posee $100 a su favor
 
 =================================
